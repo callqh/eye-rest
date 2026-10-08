@@ -219,7 +219,9 @@ struct ReturnReadyView: View {
 
 struct SettingsView: View {
     @ObservedObject var model: AppModel
+    var onClose: () -> Void
     var body: some View {
+        VStack(spacing: 0) {
         Form {
             Section("外观") {
                 Picker("主题", selection: preference(\.appearance)) {
@@ -262,6 +264,16 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+            Divider()
+            HStack {
+                Text("关闭设置后，菜单栏仍会继续提醒。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("关闭设置", action: onClose)
+                    .keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier("close-settings")
+            }.padding(.horizontal, 20).padding(.vertical, 12)
+        }
         .background(GlassBackground(material: .underWindowBackground))
         .frame(width: 500, height: 640)
         .preferredColorScheme(model.preferences.appearance.scheme)

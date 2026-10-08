@@ -10,7 +10,7 @@ final class RestPanel: NSPanel {
     }
 }
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let diagnostic = CommandLine.arguments.contains("--smoke-test")
     lazy var model = AppModel(diagnostic: diagnostic)
     private var statusItem: NSStatusItem!
@@ -63,6 +63,7 @@ final class RestPanel: NSPanel {
         let item = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "设置…", action: #selector(settingsAction), keyEquivalent: ",").target = self
+        appMenu.addItem(withTitle: "关闭设置窗口", action: #selector(closeSettingsAction), keyEquivalent: "w").target = self
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "退出休息一下", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.submenu = appMenu
@@ -80,6 +81,15 @@ final class RestPanel: NSPanel {
         popover.contentViewController?.view.window?.makeKey()
     }
     @objc private func settingsAction() { openSettings() }
+    @objc private func closeSettingsAction() { settingsWindow?.performClose(nil) }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
+        // Release the settings host instead of retaining a closed glass-backed window.
+        window.orderOut(nil)
+        settingsWindow = nil
+        DispatchQueue.main.async { window.contentViewController = nil }
+    }
 
     private func openSettings() {
         popover.performClose(nil)
@@ -88,9 +98,18 @@ final class RestPanel: NSPanel {
             window.title = "设置"
             window.isOpaque = false
             window.backgroundColor = .clear
-            window.titlebarAppearsTransparent = true
+            // Keep the native title bar and close hit target separate from glass content.
+            window.titlebarAppearsTransparent = false
             window.isReleasedWhenClosed = false
-            window.contentViewController = NSHostingController(rootView: SettingsView(model: model))
+            window.delegate = self
+            let controller = NSHostingController(rootView: SettingsView(model: model, onClose: { [weak self] in
+                self?.closeSettingsAction()
+            }))
+            controller.sizingOptions = []
+            controller.view.frame = NSRect(x: 0, y: 0, width: 500, height: 640)
+            controller.view.autoresizingMask = [.width, .height]
+            window.contentViewController = controller
+            window.setContentSize(NSSize(width: 500, height: 640))
             window.center()
             settingsWindow = window
         }
@@ -239,6 +258,39 @@ final class RestPanel: NSPanel {
         }
         later(1.1) {
             capture(self.settingsWindow!.contentView!, "settings-light")
+            let firstSettings = self.settingsWindow!
+            guard let closeButton = firstSettings.standardWindowButton(.closeButton), closeButton.isEnabled else {
+                log("FAIL native settings close button unavailable"); exit(1)
+            }
+            closeButton.performClick(nil)
+            guard !firstSettings.isVisible, self.settingsWindow == nil else {
+                log("FAIL native close retained settings window"); exit(1)
+            }
+            self.model.diagnosticAdvance(1)
+            self.syncWindows()
+            guard !firstSettings.isVisible, self.settingsWindow == nil else {
+                log("FAIL timer reopened closed settings"); exit(1)
+            }
+            self.openSettings()
+            guard let secondSettings = self.settingsWindow, secondSettings !== firstSettings, secondSettings.isVisible,
+                  let closeKey = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: secondSettings.windowNumber, context: nil, characters: "w", charactersIgnoringModifiers: "w", isARepeat: false, keyCode: 13),
+                  self.model.engine.phase == .working else {
+                log("FAIL settings reopen or background work state"); exit(1)
+            }
+            guard NSApp.mainMenu?.performKeyEquivalent(with: closeKey) == true, !secondSettings.isVisible, self.settingsWindow == nil else {
+                log("FAIL Command-W did not close settings"); exit(1)
+            }
+            self.openSettings()
+            guard let footerSettings = self.settingsWindow,
+                  let settingsHost = footerSettings.contentViewController as? NSHostingController<SettingsView> else {
+                log("FAIL settings close action unavailable"); exit(1)
+            }
+            settingsHost.rootView.onClose()
+            guard !footerSettings.isVisible, self.settingsWindow == nil else {
+                log("FAIL settings footer action did not close window"); exit(1)
+            }
+            log("PASS settings: native close, Command-W, footer action, timer stays closed, fresh reopen")
+            self.openSettings()
             self.model.requestRest()
             later(0.7) {
                 guard let panel = self.overlays.first else { log("FAIL overlay absent"); exit(1) }
@@ -301,7 +353,9 @@ final class RestPanel: NSPanel {
                                 }
                                 log("Local key resets rest: \(before) → \(self.model.engine.restRemaining)")
                                 capture(self.overlays.first!.contentView!, "active-rest")
-                                later(2.5) {
+                                // Rendering a full-resolution glass snapshot may delay the main loop.
+                                // Allow a fresh uninterrupted rest after such a delay resets the timer.
+                                later(4.5) {
                                     log("Real timer rest completed: \(self.model.engine.completedRests), overlays: \(self.overlays.count)")
                                     guard self.model.engine.phase == .awaitingReturn, self.overlays.isEmpty, self.popover.isShown else {
                                         log("FAIL return prompt missing"); exit(1)
