@@ -1,5 +1,7 @@
 # 休息一下 · Eye Rest
 
+[![macOS 构建](https://github.com/callqh/eye-rest/actions/workflows/build-macos.yml/badge.svg)](https://github.com/callqh/eye-rest/actions/workflows/build-macos.yml)
+
 **图图陪你歇一会儿。** 一款原生 macOS 菜单栏休息提醒应用：安心使用电脑，到时间看向远处，回来后自动开始下一轮。
 
 不在菜单栏展示让人紧张的倒计时，不强制锁屏，也不读取你输入的内容。
@@ -84,9 +86,22 @@
 
 ## 快速开始
 
-目前提供源码和本地构建脚本，**尚未提供经过 Developer ID 签名、公证的安装包**。
+可下载 GitHub Actions 自动打包的应用，也可从源码构建。**目前产物使用临时签名，尚未经过 Developer ID 签名和 Apple 公证。**
 
-### 1. 准备构建环境
+### 下载自动构建的应用
+
+每次提交到 `main` 分支，CI 会自动运行核心检查、构建并打包 Apple Silicon 版应用；也支持在 Actions 页面手动触发。
+
+1. 登录 GitHub，打开 [macOS 自动构建](https://github.com/callqh/eye-rest/actions/workflows/build-macos.yml)。
+2. 选择最新一次**成功**的 `main` 构建，在页面底部 **Artifacts** 下载 `EyeRest-macOS-arm64`。
+3. 解压下载的产物包，再解压其中的 `EyeRest-macOS-arm64.zip`，得到 `休息一下.app`。
+4. 将应用拖到「应用程序」目录后打开，在菜单栏寻找沙漏图标。
+
+产物同时提供 `EyeRest-macOS-arm64.zip.sha256`；可在文件所在目录执行 `shasum -a 256 -c EyeRest-macOS-arm64.zip.sha256` 校验。产物保留 **30 天**，过期后可下载较新的构建或手动重新运行。它是 Actions 构建产物，不是 GitHub Release 安装包。
+
+CI 使用 macOS 26 ARM64 runner，以满足 Liquid Glass 的 SDK 要求；应用最低运行系统仍为 macOS 14，暂不提供 Intel / Universal 版本。
+
+### 从源码构建：1. 准备构建环境
 
 - macOS、Apple Command Line Tools 或完整 Xcode。
 - 构建机需要包含 **macOS 26 或更新 SDK** 的工具链，以编译 Liquid Glass API；最低运行版本仍为 macOS 14。

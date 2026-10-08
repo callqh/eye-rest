@@ -29,6 +29,21 @@ open "$HOME/Applications/休息一下.app"
 
 安装脚本默认写入个人应用程序目录；若已有同名且不同 bundle identifier 的应用，会拒绝覆盖。更新正在运行的应用前，建议先从菜单栏退出旧版本。
 
+## GitHub Actions 自动打包
+
+[构建工作流](<../.github/workflows/build-macos.yml>) 在推送到 `main` 时自动执行，也支持 `workflow_dispatch` 手动触发。相同分支有新构建时会取消旧的未完成构建，优先产出最新提交。
+
+- 使用 `macos-26` ARM64 runner，检查 SDK 主版本至少为 26。
+- 执行核心规则检查，再复用本地构建脚本生成 `.app`。
+- 检查 bundle 的可执行文件、图图素材、图标、元数据、ARM64 架构和临时签名。
+- 使用 `ditto` 打包 ZIP，重新解压并检查执行权限和签名，避免直接上传 `.app` 导致权限丢失。
+- 上传 `EyeRest-macOS-arm64.zip` 及 SHA-256 校验文件，产物保留 30 天。
+- 工作流仅需要 `contents: read`，不需要 Apple 证书或额外仓库 Secrets，不自动创建 Release。
+
+登录 GitHub 后，在 [Actions 页面](https://github.com/callqh/eye-rest/actions/workflows/build-macos.yml) 的成功构建中下载 `EyeRest-macOS-arm64`。外层是 Actions 产物 ZIP，解压后再解压应用 ZIP，即可获得「休息一下.app」。
+
+CI 不启动 GUI 烟雾检查，避免把云端桌面环境当成双屏实机验证；GUI 检查仍在开发 Mac 上手动运行。
+
 ## 核心状态机检查
 
 ```sh

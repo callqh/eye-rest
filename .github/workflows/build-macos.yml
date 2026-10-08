@@ -1,0 +1,95 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and package Apple Silicon app
+    # This image includes the macOS 26 SDK required by Liquid Glass.
+    runs-on: macos-26
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Verify build environment
+        run: |
+          set -euo pipefail
+          sw_vers
+          swift --version
+          xcodebuild -version
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          echo "macOS SDK: $sdk_version"
+          test "${sdk_version%%.*}" -ge 26
+          test "$(uname -m)" = arm64
+
+      - name: Run core rule checks
+        run: swift run -c release RestEngineChecks
+
+      - name: Build signed app bundle
+        run: ./scripts/build-app.sh
+
+      - name: Verify and package app
+        run: |
+          set -euo pipefail
+          app="build/休息一下.app"
+          test -x "$app/Contents/MacOS/EyeRest"
+          test -s "$app/Contents/Resources/tutu-spritesheet.png"
+          test -s "$app/Contents/Resources/AppIcon.icns"
+          plutil -lint "$app/Contents/Info.plist"
+          lipo -verify_arch arm64 "$app/Contents/MacOS/EyeRest"
+          codesign --verify --strict "$app"
+          mkdir -p build/ci
+          # Zip before upload: direct artifact upload loses executable permissions.
+          ditto -c -k --sequesterRsrc --keepParent "$app" build/ci/EyeRest-macOS-arm64.zip
+          unzip -t build/ci/EyeRest-macOS-arm64.zip
+          verification_dir="$(mktemp -d "$RUNNER_TEMP/eye-rest-package.XXXXXX")"
+          ditto -x -k build/ci/EyeRest-macOS-arm64.zip "$verification_dir"
+          test -x "$verification_dir/休息一下.app/Contents/MacOS/EyeRest"
+          codesign --verify --strict "$verification_dir/休息一下.app"
+
+      - name: Generate SHA-256 checksum
+        working-directory: build/ci
+        run: shasum -a 256 EyeRest-macOS-arm64.zip > EyeRest-macOS-arm64.zip.sha256
+
+      - name: Upload app artifact
+        id: artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: EyeRest-macOS-arm64
+          path: |
+            build/ci/EyeRest-macOS-arm64.zip
+            build/ci/EyeRest-macOS-arm64.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Add download instructions
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          {
+            echo '## 休息一下 · macOS 构建产物'
+            echo
+            echo "- [下载 Apple Silicon 应用产物]($ARTIFACT_URL)（需登录 GitHub）"
+            echo '- 解压下载的产物包，再解压其中的 EyeRest-macOS-arm64.zip，得到「休息一下.app」。'
+            echo '- 支持 macOS 14 及以上；产物保留 30 天。'
+            echo '- 使用临时签名，未经过 Developer ID 签名和 Apple 公证。'
+            echo '- 同时提供 SHA-256 校验文件；解压不会丢失可执行权限。'
+          } >> "$GITHUB_STEP_SUMMARY"
