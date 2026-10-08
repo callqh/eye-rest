@@ -1,0 +1,21 @@
+# Swift / 本地构建
+.build/
+.swiftpm/
+build/
+.DS_Store
+*.xcuserstate
+
+# 本地视频、早期概念稿与内部讨论记录（不属于公开源码）
+/video/
+/design/
+/CONTEXT.md
+/DESIGN.md
+/VERIFICATION.md
+
+# 本地配置、凭证与签名材料
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.mobileprovision
