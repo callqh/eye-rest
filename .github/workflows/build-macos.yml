@@ -93,3 +93,67 @@ jobs:
             echo '- 使用临时签名，未经过 Developer ID 签名和 Apple 公证。'
             echo '- 同时提供 SHA-256 校验文件；解压不会丢失可执行权限。'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download verified app artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: EyeRest-macOS-arm64
+          path: dist
+
+      - name: Verify checksum
+        working-directory: dist
+        run: sha256sum -c EyeRest-macOS-arm64.zip.sha256
+
+      - name: Publish main build as a prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Each run attempt gets its own immutable tag: never move existing tags.
+          tag="build-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          notes="$RUNNER_TEMP/eye-rest-release-notes.md"
+          {
+            echo '## 休息一下 · main 自动构建'
+            echo
+            printf '提交：[%s](https://github.com/%s/commit/%s)\n' "$GITHUB_SHA" "$GH_REPO" "$GITHUB_SHA"
+            printf '构建：[GitHub Actions #%s](https://github.com/%s/actions/runs/%s)\n' "$GITHUB_RUN_NUMBER" "$GH_REPO" "$GITHUB_RUN_ID"
+            echo
+            echo '### 下载与安装'
+            echo '- 下载 EyeRest-macOS-arm64.zip，解压即可得到「休息一下.app」，拖入应用程序目录后打开。'
+            echo '- Apple Silicon 版本，最低运行系统 macOS 14；暂不提供 Intel / Universal 版本。'
+            echo '- 同时提供 SHA-256 校验文件，可运行 shasum -a 256 -c EyeRest-macOS-arm64.zip.sha256 验证。'
+            echo
+            echo '### 注意'
+            echo '- 这是 main 分支的自动预发布构建，不代表经过完整实机验证的稳定版。'
+            echo '- 应用使用临时签名，未经过 Developer ID 签名和 Apple 公证；请先确认来源，再按 macOS 安全提示处理。'
+          } > "$notes"
+          # Keep incomplete uploads private if the job fails or is canceled.
+          gh release create "$tag" \
+            dist/EyeRest-macOS-arm64.zip \
+            dist/EyeRest-macOS-arm64.zip.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "休息一下 · main 构建 #${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" \
+            --notes-file "$notes" \
+            --draft --prerelease --latest=false
+          gh release edit "$tag" --draft=false
+          {
+            echo '## Release 已发布'
+            echo
+            printf '[直接下载应用 ZIP](https://github.com/%s/releases/download/%s/EyeRest-macOS-arm64.zip)\n' "$GH_REPO" "$tag"
+            printf '\n[查看发布说明](https://github.com/%s/releases/tag/%s)\n' "$GH_REPO" "$tag"
+            echo
+            echo '公开 Release 无需登录即可下载，资产不受 Actions 产物 30 天保留期限制。'
+          } >> "$GITHUB_STEP_SUMMARY"

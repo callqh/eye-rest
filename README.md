@@ -90,14 +90,17 @@
 
 ### 下载自动构建的应用
 
-每次提交到 `main` 分支，CI 会自动运行核心检查、构建并打包 Apple Silicon 版应用；也支持在 Actions 页面手动触发。
+每次提交到 `main` 分支，CI 会自动运行核心检查、构建并打包 Apple Silicon 版应用，成功后创建一条 GitHub **预发布 Release**，上传应用 ZIP 和校验文件；也支持在 Actions 页面手动触发 `main` 构建。
 
-1. 登录 GitHub，打开 [macOS 自动构建](https://github.com/callqh/eye-rest/actions/workflows/build-macos.yml)。
-2. 选择最新一次**成功**的 `main` 构建，在页面底部 **Artifacts** 下载 `EyeRest-macOS-arm64`。
-3. 解压下载的产物包，再解压其中的 `EyeRest-macOS-arm64.zip`，得到 `休息一下.app`。
-4. 将应用拖到「应用程序」目录后打开，在菜单栏寻找沙漏图标。
+1. 打开 [Releases 下载页](https://github.com/callqh/eye-rest/releases)，选择最新的 `main` 自动构建，**无需登录 GitHub**。
+2. 在该 Release 的 **Assets** 中下载 `EyeRest-macOS-arm64.zip`。
+3. 解压得到 `休息一下.app`，拖到「应用程序」目录后打开，在菜单栏寻找沙漏图标。
 
-产物同时提供 `EyeRest-macOS-arm64.zip.sha256`；可在文件所在目录执行 `shasum -a 256 -c EyeRest-macOS-arm64.zip.sha256` 校验。产物保留 **30 天**，过期后可下载较新的构建或手动重新运行。它是 Actions 构建产物，不是 GitHub Release 安装包。
+产物同时提供 `EyeRest-macOS-arm64.zip.sha256`；可在文件所在目录执行 `shasum -a 256 -c EyeRest-macOS-arm64.zip.sha256` 校验。Release 附件不受 Actions 产物 30 天保留期限制。
+
+每次构建使用独立的 `build-<运行序号>.<重试序号>` 标签，保留对应提交，不覆盖历史标签或附件。自动预发布构建不代表完整实机验证的稳定版本。
+
+备用下载：[macOS 自动构建](https://github.com/callqh/eye-rest/actions/workflows/build-macos.yml) 中也保留 `EyeRest-macOS-arm64` Artifacts，需登录下载、保留 **30 天**；下载后先解压外层产物包，再解压其中的应用 ZIP。
 
 CI 使用 macOS 26 ARM64 runner，以满足 Liquid Glass 的 SDK 要求；应用最低运行系统仍为 macOS 14，暂不提供 Intel / Universal 版本。
 

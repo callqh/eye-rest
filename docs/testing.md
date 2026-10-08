@@ -38,9 +38,14 @@ open "$HOME/Applications/休息一下.app"
 - 检查 bundle 的可执行文件、图图素材、图标、元数据、ARM64 架构和临时签名。
 - 使用 `ditto` 打包 ZIP，重新解压并检查执行权限和签名，避免直接上传 `.app` 导致权限丢失。
 - 上传 `EyeRest-macOS-arm64.zip` 及 SHA-256 校验文件，产物保留 30 天。
-- 工作流仅需要 `contents: read`，不需要 Apple 证书或额外仓库 Secrets，不自动创建 Release。
+- 构建任务仅需要 `contents: read`；独立的发布任务使用 `actions: read` 和 `contents: write`，通过仓库自带的 `GITHUB_TOKEN` 发布，不需要 Apple 证书或额外 Secrets。
+- 仅在 `main` 构建成功后发布；下载已经验证的产物并再次校验 SHA-256，不重复编译。
+- 每次运行 / 重试生成独立的 `build-<运行序号>.<重试序号>` 标签，指向实际构建提交。先创建草稿并上传全部附件，再公开为预发布 Release，避免暴露不完整附件。
+- 手动运行其他分支只生成 Actions 产物，不发布 Release。发布不会移动已有标签或覆盖旧附件。
 
-登录 GitHub 后，在 [Actions 页面](https://github.com/callqh/eye-rest/actions/workflows/build-macos.yml) 的成功构建中下载 `EyeRest-macOS-arm64`。外层是 Actions 产物 ZIP，解压后再解压应用 ZIP，即可获得「休息一下.app」。
+首选下载：[Releases 页面](https://github.com/callqh/eye-rest/releases) 的最新自动预发布，直接下载应用 ZIP，解压即得到「休息一下.app」，无需登录。Release 资产不受 30 天的 Actions 产物保留期限制。
+
+备用方式：登录 GitHub 后，在 [Actions 页面](https://github.com/callqh/eye-rest/actions/workflows/build-macos.yml) 的成功构建中下载 `EyeRest-macOS-arm64`。外层是 Actions 产物 ZIP，解压后再解压应用 ZIP。
 
 CI 不启动 GUI 烟雾检查，避免把云端桌面环境当成双屏实机验证；GUI 检查仍在开发 Mac 上手动运行。
 
